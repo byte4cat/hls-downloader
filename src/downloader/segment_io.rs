@@ -4,7 +4,7 @@ use futures::FutureExt; // For FutureExt::map on JoinHandle
 use futures::stream::{self, StreamExt};
 use reqwest::{Client, StatusCode, Url};
 use std::fs::File;
-use std::io;
+use std::io::{self};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -18,6 +18,7 @@ use tokio::time::sleep;
 // 引入解密和 HLS 相關類型
 use super::DownloadMessage;
 use super::hls_parser::{EncryptionInfo, KEY_LEN, MAX_RETRIES, Segment};
+use crate::downloader::ffmpeg_embed::FFmpegHandle;
 
 // Decryption imports
 use aes::Aes128;
@@ -178,6 +179,7 @@ async fn download_and_process_segment(
         match result {
             Ok(response) => {
                 let status = response.status();
+
                 if status.is_success() {
                     let encrypted_bytes = response.bytes().await?;
                     let segment_size = encrypted_bytes.len();
@@ -264,7 +266,9 @@ pub fn concatenate_segments(segment_paths: &[PathBuf], output_path: &Path) -> Re
 
 /// Uses FFmpeg to remux the temporary TS file to the desired output format.
 pub fn run_ffmpeg_remux(input_path: &Path, output_path: &Path) -> Result<()> {
-    let output = Command::new("ffmpeg")
+    let ff = FFmpegHandle::ensure()?;
+    let ff_path = ff.path();
+    let output = Command::new(ff_path)
         .arg("-i")
         .arg(input_path)
         .arg("-c")

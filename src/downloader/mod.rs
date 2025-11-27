@@ -6,6 +6,7 @@ use tempfile::tempdir;
 use tokio::sync::mpsc;
 
 // 導出子模組
+pub mod ffmpeg_embed;
 pub mod hls_parser;
 pub mod segment_io;
 pub mod util;

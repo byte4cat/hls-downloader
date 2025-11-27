@@ -310,7 +310,7 @@ impl HlsDownloaderApp {
 
 // 1. 在編譯時嵌入字體文件
 // 確保 'NotoSansCJKtc-Regular.otf' 檔案存在於專案根目錄或指定的相對路徑
-const CJK_FONT_DATA: &[u8] = include_bytes!("./fonts/NotoSansCJKtc-Regular.otf");
+const CJK_FONT_DATA: &[u8] = include_bytes!("./assets/fonts/NotoSansCJKtc-Regular.otf");
 
 fn main() -> Result<(), eframe::Error> {
     let options = NativeOptions {
