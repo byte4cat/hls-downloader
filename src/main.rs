@@ -128,7 +128,7 @@ impl App for HlsDownloaderApp {
                 egui::Grid::new("input_grid")
                     .num_columns(2) // 兩欄: 標籤 和 Widget
                     .spacing([20.0, 10.0]) // [水平間距, 垂直間距]
-                    .striped(true) // 可選：增加條紋背景以提高可讀性
+                    .striped(true) // 增加條紋背景以提高可讀性
                     .show(ui, |ui| {
                         // --- M3U8 URL ---
                         ui.label("M3U8 URL:"); // 第一欄: 標籤
