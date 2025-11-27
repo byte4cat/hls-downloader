@@ -122,7 +122,7 @@ impl App for HlsDownloaderApp {
             ui.heading("HLS Stream Downloader");
             ui.separator();
 
-            // 1. Input Block
+            // Input Block
             ui.add_enabled_ui(!self.is_downloading, |ui| {
                 // 使用 Grid 確保標籤和輸入框垂直對齊
                 egui::Grid::new("input_grid")
@@ -145,7 +145,7 @@ impl App for HlsDownloaderApp {
                             // 第二欄: 輸入框 + 按鈕
                             ui.add(egui::TextEdit::singleline(&mut self.output_location));
 
-                            // 新增 "Browse" 按鈕和 rfd 邏輯
+                            // "Browse" 按鈕和 rfd 邏輯
                             if ui.button("Browse...").clicked() {
                                 let current_location = self.output_location.clone();
                                 // 使用 self.sender (現在已在結構體中定義)
@@ -165,6 +165,34 @@ impl App for HlsDownloaderApp {
                                     }
                                 });
                             }
+
+                            // 只有當 output_location 非空時才啟用
+                            ui.add_enabled(
+                                !self.output_location.is_empty(),
+                                |ui: &mut egui::Ui| {
+                                    // 創建一個 scope，並返回 scope 的 Response
+                                    ui.scope(|ui| {
+                                        let button_response = ui.button("Open Folder");
+
+                                        if button_response.clicked() {
+                                            let path_to_open = self.output_location.clone();
+                                            // opener 函式庫用於在作業系統中開啟檔案或資料夾
+                                            if let Err(e) = opener::open(&path_to_open) {
+                                                // 錯誤處理
+                                                eprintln!(
+                                                    "Failed to open directory {}: {}",
+                                                    path_to_open, e
+                                                );
+                                            }
+                                        }
+
+                                        // 返回按鈕的 Response，這成為 scope 的返回值
+                                        button_response
+                                    })
+                                    .response
+                                    // .response 是 Scope 結構體的屬性，包含其內部 Widget 的整體響應。
+                                },
+                            );
                         });
                         ui.end_row();
 
@@ -183,7 +211,7 @@ impl App for HlsDownloaderApp {
 
                             ui.separator(); // 視覺分隔符
 
-                            // 2. Output Format (Dropdown)
+                            // Output Format (Dropdown)
                             let formats = ["mp4", "mkv", "webm", "ts"];
                             ui.label("Format:"); // 在水平佈局中再次加入標籤
 
