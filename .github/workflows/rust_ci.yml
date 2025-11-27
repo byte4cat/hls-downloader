@@ -1,0 +1,122 @@
+name: Rust CI & Cross-Platform Release
+
+on:
+  push:
+    branches: [ "main" ]
+    # 新增：只有當推送標籤為 vX.Y.Z 格式時才觸發 CI/CD 流程
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always # 讓 Cargo 輸出帶有顏色
+
+jobs:
+  # ----------------------------------------------------
+  # 1. Check & Test Job: 執行程式碼品質檢查和測試
+  # (會在所有觸發條件下執行：push main, pull request, push tag)
+  # ----------------------------------------------------
+  check:
+    name: Check & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          components: rustfmt # 需要 rustfmt 來進行格式檢查
+
+      - name: Cache Cargo dependencies
+        # 使用緩存加快後續建構速度
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run cargo fmt check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --check
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  # ----------------------------------------------------
+  # 2. Release Job: 建構跨平台發佈版本
+  # (限定條件：只有在 Check 通過且是 'v' 開頭的標籤推送時才執行)
+  # ----------------------------------------------------
+  release:
+    name: Build ${{ matrix.os }} Release
+    needs: check # 確保只有在檢查和測試通過後才建構
+    runs-on: ${{ matrix.os }}
+    # 執行條件：確保只有當觸發事件是推送一個以 'refs/tags/v' 開頭的標籤時才執行
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      # 定義多個平台及其配置
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin_path: target/${{ matrix.target }}/release/hls_downloader
+            archive_name: hls_downloader-linux-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin_path: target/${{ matrix.target }}/release/hls_downloader.exe
+            archive_name: hls_downloader-windows-x64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bin_path: target/${{ matrix.target }}/release/hls_downloader
+            archive_name: hls_downloader-macos-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          profile: minimal
+          override: true
+
+      # 安裝 Linux 執行所需的依賴 (eframe/egui 通常需要的 GTK/XCB 庫)
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev libssl-dev
+
+      - name: Build release
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          # 使用 target 參數確保建構到正確的目標目錄
+          args: --release --target ${{ matrix.target }}
+
+      # 上傳編譯好的二進制檔案作為 Artifact
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive_name }}
+          # 檢查檔案是否存在，因為 macOS 和 Linux 的檔案權限可能不同，
+          # 且 Windows 的路徑包含 .exe
+          path: ${{ matrix.bin_path }}
+          retention-days: 5

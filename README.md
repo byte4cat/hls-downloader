@@ -1,7 +1,5 @@
 # HLS Stream Downloader
 
-## Overview
-
 hls_downloader is a lightweight application developed using the $\text{Rust}$ language and the $\text{egui}$ Graphical User Interface ($\text{GUI}$) framework. It is specifically designed for downloading $\text{HTTP Live Streaming (HLS)}$ streams (.m3u8 playlists). The application provides an intuitive interface and supports multi-threaded concurrent downloading, ensuring efficient and reliable video acquisition.
 
 ## Key Features
