@@ -9,13 +9,13 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 use anyhow::{Result, anyhow};
 use dirs::cache_dir;
 use sha2::{Digest, Sha256};
 use zstd::stream::copy_decode;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 // Per-platform embedded compressed bytes (zstd). Replace asset paths with your actual files.
 // Provide one compressed file per platform in your assets dir, e.g. assets/bin/linux/ffmpeg.zst
