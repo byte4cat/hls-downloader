@@ -6,9 +6,11 @@
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use anyhow::{Result, anyhow};
 use dirs::cache_dir;
