@@ -11,7 +11,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always # 讓 Cargo 輸出帶有顏色
-  BIN_NAME: hls-downloader # 定義專案二進制名稱，方便重複使用
+  BIN_NAME: hls-downloader # 定義專案二進制名稱，以匹配 Cargo.toml 中 [[bin]] 的設置
 
 jobs:
   # ----------------------------------------------------
@@ -72,17 +72,17 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bin_path: target/${{ matrix.target }}/release/${{ env.BIN_NAME }}
+            target_dir: target/x86_64-unknown-linux-gnu/release
             asset_ext: tar.gz
             asset_name: linux-x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin_path: target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe
+            target_dir: target/x86_64-pc-windows-msvc/release
             asset_ext: zip
             asset_name: windows-x64
           - os: macos-latest
             target: x86_64-apple-darwin
-            bin_path: target/${{ matrix.target }}/release/${{ env.BIN_NAME }}
+            target_dir: target/x86_64-apple-darwin/release
             asset_ext: tar.gz
             asset_name: macos-x64
 
@@ -108,24 +108,36 @@ jobs:
           command: build
           args: --release --target ${{ matrix.target }}
 
+      # 設置二進制檔案的完整路徑和名稱
+      - name: Set Binary Path and Name
+        id: set_path
+        run: |
+          BINARY_PATH="${{ matrix.target_dir }}/${{ env.BIN_NAME }}"
+          # Windows 的執行檔名稱會有 .exe 後綴
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            BINARY_PATH="${{ matrix.target_dir }}/${{ env.BIN_NAME }}.exe"
+          fi
+          echo "BIN_PATH=${BINARY_PATH}" >> $GITHUB_OUTPUT
+          echo "ARCHIVE_NAME=${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }}" >> $GITHUB_OUTPUT
+
       # 壓縮二進制檔案 (Linux & macOS: tar.gz)
       - name: Compress Linux/macOS
         if: runner.os != 'Windows'
-        run: tar -czf ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }} -C target/${{ matrix.target }}/release ${{ env.BIN_NAME }}
+        run: tar -czf ${{ steps.set_path.outputs.ARCHIVE_NAME }} -C ${{ matrix.target_dir }} ${{ env.BIN_NAME }}
 
       # 壓縮二進制檔案 (Windows: zip)
       - name: Compress Windows
         if: runner.os == 'Windows'
-        # 使用 PowerShell 的 Compress-Archive Cmdlet
-        run: Compress-Archive -Path ${{ matrix.bin_path }} -DestinationPath ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }}
+        # 使用 PowerShell 的 Compress-Archive Cmdlet，使用 step 輸出的 BIN_PATH
+        run: Compress-Archive -Path ${{ steps.set_path.outputs.BIN_PATH }} -DestinationPath ${{ steps.set_path.outputs.ARCHIVE_NAME }}
 
       # 上傳壓縮後的檔案作為 Artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          # 將 Artifact 名稱定義為最終檔案名，方便後續 Job 下載
-          name: ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }}
-          path: ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }}
+          # 將 Artifact 名稱定義為最終檔案名
+          name: ${{ steps.set_path.outputs.ARCHIVE_NAME }}
+          path: ${{ steps.set_path.outputs.ARCHIVE_NAME }}
           retention-days: 1 # Artifacts 只需要短暫保留
 
   # ----------------------------------------------------
@@ -164,6 +176,7 @@ jobs:
           prerelease: false
 
           # 將所有下載的 Artifacts (在 release_assets/ 子目錄中) 作為 Assets 附加
+          # 使用 artifact 的名稱作為檔案名，所以 glob 模式為 */*
           files: release_assets/*/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
