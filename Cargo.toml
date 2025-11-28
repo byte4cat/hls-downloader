@@ -3,6 +3,10 @@ name = "hls_downloader"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "hls-downloader"
+path = "src/main.rs"
+
 [dependencies]
 eframe = "0.26"
 egui = "0.26"

@@ -119,7 +119,7 @@ impl App for HlsDownloaderApp {
         // ---------------------------------------
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("HLS Stream Downloader");
+            ui.heading("HLS Downloader");
             ui.separator();
 
             // Input Block

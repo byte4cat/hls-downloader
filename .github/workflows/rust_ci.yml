@@ -11,11 +11,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always # 讓 Cargo 輸出帶有顏色
+  BIN_NAME: hls-downloader # 定義專案二進制名稱，方便重複使用
 
 jobs:
   # ----------------------------------------------------
   # 1. Check & Test Job: 執行程式碼品質檢查和測試
-  # (會在所有觸發條件下執行：push main, pull request, push tag)
   # ----------------------------------------------------
   check:
     name: Check & Test
@@ -29,10 +29,9 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
-          components: rustfmt # 需要 rustfmt 來進行格式檢查
+          components: rustfmt
 
       - name: Cache Cargo dependencies
-        # 使用緩存加快後續建構速度
         uses: actions/cache@v4
         with:
           path: |
@@ -60,31 +59,32 @@ jobs:
           command: test
 
   # ----------------------------------------------------
-  # 2. Release Job: 建構跨平台發佈版本
-  # (限定條件：只有在 Check 通過且是 'v' 開頭的標籤推送時才執行)
+  # 2. Build Artifacts Job: 建構跨平台 Release 二進制檔案
   # ----------------------------------------------------
-  release:
+  build_artifacts:
     name: Build ${{ matrix.os }} Release
-    needs: check # 確保只有在檢查和測試通過後才建構
-    runs-on: ${{ matrix.os }}
-    # 執行條件：確保只有當觸發事件是推送一個以 'refs/tags/v' 開頭的標籤時才執行
+    needs: check
+    # 僅在推送標籤時執行
     if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.os }}
     strategy:
-      # 定義多個平台及其配置
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bin_path: target/x86_64-unknown-linux-gnu/release/hls_downloader
-            archive_name: hls-downloader-linux-x64
+            bin_path: target/${{ matrix.target }}/release/${{ env.BIN_NAME }}
+            asset_ext: tar.gz
+            asset_name: linux-x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin_path: target/x86_64-pc-windows-msvc/release/hls_downloader.exe
-            archive_name: hls-downloader-windows-x64
+            bin_path: target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe
+            asset_ext: zip
+            asset_name: windows-x64
           - os: macos-latest
             target: x86_64-apple-darwin
-            bin_path: target/x86_64-apple-darwin/release/hls_downloader
-            archive_name: hls-downloader-macos-x64
+            bin_path: target/${{ matrix.target }}/release/${{ env.BIN_NAME }}
+            asset_ext: tar.gz
+            asset_name: macos-x64
 
     steps:
       - uses: actions/checkout@v4
@@ -100,23 +100,70 @@ jobs:
       # 安裝 Linux 執行所需的依賴 (eframe/egui 通常需要的 GTK/XCB 庫)
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev libssl-dev
 
-      - name: Build release
+      - name: Build release binary
         uses: actions-rs/cargo@v1
         with:
           command: build
-          # 使用 target 參數確保建構到正確的目標目錄
           args: --release --target ${{ matrix.target }}
 
-      # 上傳編譯好的二進制檔案作為 Artifact
+      # 壓縮二進制檔案 (Linux & macOS: tar.gz)
+      - name: Compress Linux/macOS
+        if: runner.os != 'Windows'
+        run: tar -czf ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }} -C target/${{ matrix.target }}/release ${{ env.BIN_NAME }}
+
+      # 壓縮二進制檔案 (Windows: zip)
+      - name: Compress Windows
+        if: runner.os == 'Windows'
+        # 使用 PowerShell 的 Compress-Archive Cmdlet
+        run: Compress-Archive -Path ${{ matrix.bin_path }} -DestinationPath ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }}
+
+      # 上傳壓縮後的檔案作為 Artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.archive_name }}
-          # 檢查檔案是否存在，因為 macOS 和 Linux 的檔案權限可能不同，
-          # 且 Windows 的路徑包含 .exe
-          path: ${{ matrix.bin_path }}
-          retention-days: 5
+          # 將 Artifact 名稱定義為最終檔案名，方便後續 Job 下載
+          name: ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }}
+          path: ${{ env.BIN_NAME }}-${{ matrix.asset_name }}.${{ matrix.asset_ext }}
+          retention-days: 1 # Artifacts 只需要短暫保留
+
+  # ----------------------------------------------------
+  # 3. Create GitHub Release Job: 下載所有 Artifacts 並發布
+  # ----------------------------------------------------
+  create_github_release:
+    name: Create GitHub Release
+    needs: build_artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 必須要有寫入權限才能創建 Release
+    # 確保只有在標籤推送時才執行
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      # 為了確保發佈的 Assets 檔案存在於本地，我們需要先下載
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # 不指定 name 會下載所有 artifacts，它們會被放在以 artifact 名稱命名的子目錄中
+          path: release_assets
+
+      # 建立 Release Notes (從 Git Tag 訊息或其他地方獲取)
+      - name: Generate Release Notes
+        run: echo "## What's Changed in ${{ github.ref_name }}\n\n- Initial release or features." > release_notes.md
+
+      # 使用 softprops/action-gh-release 創建 Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          # github.ref_name 是 vX.Y.Z 標籤名稱
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false # 設為 true 可以先作為草稿
+          prerelease: false
+
+          # 將所有下載的 Artifacts (在 release_assets/ 子目錄中) 作為 Assets 附加
+          files: release_assets/*/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

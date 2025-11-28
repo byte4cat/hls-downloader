@@ -1,4 +1,4 @@
-# HLS Stream Downloader
+# HLS Downloader
 
 hls_downloader is a lightweight application developed using the $\text{Rust}$ language and the $\text{egui}$ Graphical User Interface ($\text{GUI}$) framework. It is specifically designed for downloading $\text{HTTP Live Streaming (HLS)}$ streams (.m3u8 playlists). The application provides an intuitive interface and supports multi-threaded concurrent downloading, ensuring efficient and reliable video acquisition.
 
@@ -25,16 +25,14 @@ In the root directory of the project, execute the following command:
 cargo run
 ```
 
-
 ### Building Executable
 
 If you wish to build a standalone executable file, you can run:
 
 ```sh
 cargo build --release
-# The executable will be found in target/release/hls_downloader (or .exe)
+# The executable will be found in target/release/hls-downloader (or .exe)
 ```
-
 
 
 ## Usage Guide
